@@ -61,23 +61,41 @@ fn handle_py_value_err<T: Into<P>, E: ToString, P>(res: Result<T, E>) -> PyResul
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Display, Hash)]
 #[pyclass(module = "anchorpy_core.idl")]
 pub enum IdlTypeSimple {
+    #[serde(rename = "bool")]
     Bool,
+    #[serde(rename = "u8")]
     U8,
+    #[serde(rename = "i8")]
     I8,
+    #[serde(rename = "u16")]
     U16,
+    #[serde(rename = "i16")]
     I16,
+    #[serde(rename = "u32")]
     U32,
+    #[serde(rename = "i32")]
     I32,
+    #[serde(rename = "f32")]
     F32,
+    #[serde(rename = "u64")]
     U64,
+    #[serde(rename = "i64")]
     I64,
+    #[serde(rename = "f64")]
     F64,
+    #[serde(rename = "u128")]
     U128,
+    #[serde(rename = "i128")]
     I128,
+    #[serde(rename = "u256")]
     U256,
+    #[serde(rename = "i256")]
     I256,
+    #[serde(rename = "bytes")]
     Bytes,
+    #[serde(rename = "string")]
     String,
+    #[serde(rename = "publicKey", alias = "pubkey")]  // Support both old and new formats
     PublicKey,
 }
 
@@ -112,11 +130,54 @@ impl PyHash for IdlTypeSimple {}
 #[pymethods]
 impl IdlTypeSimple {}
 
-#[derive(Debug, Clone, PartialEq, Eq, From, Into, Serialize, Deserialize, Hash, Display)]
+// Helper for deserializing both old and new defined type formats
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+enum IdlTypeDefinedFormat {
+    String(String),                   // Old format: just a string
+    Object { name: String },          // New format: object with name field
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Display)]
 #[pyclass(module = "anchorpy_core.idl", subclass)]
 pub struct IdlTypeDefined(String);
 
 impl PyHash for IdlTypeDefined {}
+
+impl<'de> Deserialize<'de> for IdlTypeDefined {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let format = IdlTypeDefinedFormat::deserialize(deserializer)?;
+        Ok(match format {
+            IdlTypeDefinedFormat::String(s) => IdlTypeDefined(s),
+            IdlTypeDefinedFormat::Object { name } => IdlTypeDefined(name),
+        })
+    }
+}
+
+impl Serialize for IdlTypeDefined {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        // Always serialize as the old format for backward compatibility
+        self.0.serialize(serializer)
+    }
+}
+
+impl From<String> for IdlTypeDefined {
+    fn from(s: String) -> Self {
+        IdlTypeDefined(s)
+    }
+}
+
+impl Into<String> for IdlTypeDefined {
+    fn into(self) -> String {
+        self.0
+    }
+}
 
 #[richcmp_eq_only]
 #[common_methods]
@@ -125,7 +186,7 @@ impl PyHash for IdlTypeDefined {}
 impl IdlTypeDefined {
     #[new]
     pub fn new(defined: String) -> Self {
-        defined.into()
+        IdlTypeDefined(defined)
     }
 
     #[getter]
@@ -458,9 +519,70 @@ impl IdlConst {
 struct_boilerplate!(IdlConst);
 debug_display!(IdlConst);
 
-#[derive(Debug, Clone, PartialEq, From, Into, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 #[pyclass(module = "anchorpy_core.idl", subclass)]
-pub struct IdlField(anchor_idl::types::IdlField);
+pub struct IdlField {
+    name: String,
+    docs: Option<Vec<String>>,
+    ty: IdlType,
+}
+
+// Custom deserialization to handle both old and new formats
+impl<'de> Deserialize<'de> for IdlField {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct IdlFieldHelper {
+            name: String,
+            docs: Option<Vec<String>>,
+            #[serde(rename = "type")]
+            ty: IdlType,
+        }
+
+        let helper = IdlFieldHelper::deserialize(deserializer)?;
+        Ok(IdlField {
+            name: helper.name,
+            docs: helper.docs,
+            ty: helper.ty,
+        })
+    }
+}
+
+impl Serialize for IdlField {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut state = serializer.serialize_struct("IdlField", 3)?;
+        state.serialize_field("name", &self.name)?;
+        state.serialize_field("docs", &self.docs)?;
+        state.serialize_field("type", &self.ty)?;
+        state.end()
+    }
+}
+
+impl From<IdlField> for anchor_idl::types::IdlField {
+    fn from(field: IdlField) -> Self {
+        anchor_idl::types::IdlField {
+            name: field.name,
+            docs: field.docs,
+            ty: field.ty.into(),
+        }
+    }
+}
+
+impl From<anchor_idl::types::IdlField> for IdlField {
+    fn from(field: anchor_idl::types::IdlField) -> Self {
+        IdlField {
+            name: field.name,
+            docs: field.docs,
+            ty: field.ty.into(),
+        }
+    }
+}
 
 #[richcmp_eq_only]
 #[common_methods]
@@ -468,36 +590,91 @@ pub struct IdlField(anchor_idl::types::IdlField);
 impl IdlField {
     #[new]
     pub fn new(name: String, docs: Option<Vec<String>>, ty: IdlType) -> Self {
-        anchor_idl::types::IdlField {
+        IdlField {
             name,
             docs,
-            ty: ty.into(),
+            ty,
         }
-        .into()
     }
 
     #[getter]
     pub fn name(&self) -> String {
-        self.0.name.clone()
+        self.name.clone()
     }
 
     #[getter]
     pub fn docs(&self) -> Option<Vec<String>> {
-        self.0.docs.clone()
+        self.docs.clone()
     }
 
     #[getter]
     pub fn ty(&self) -> IdlType {
-        self.0.ty.clone().into()
+        self.ty.clone()
     }
 }
 
 struct_boilerplate!(IdlField);
 debug_display!(IdlField);
 
-#[derive(Debug, Clone, PartialEq, From, Into, Serialize, Deserialize)]
+// Enum to handle both named fields and tuple fields in structs
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum StructFields {
+    Named(Vec<IdlField>),   // Normal struct with named fields
+    Tuple(Vec<IdlType>),    // Tuple struct with just types
+}
+
+impl IntoPy<PyObject> for StructFields {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        match self {
+            StructFields::Named(fields) => fields.into_py(py),
+            StructFields::Tuple(types) => types.into_py(py),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
 #[pyclass(module = "anchorpy_core.idl", subclass)]
-pub struct IdlTypeDefinitionTyStruct(Vec<IdlField>);
+pub struct IdlTypeDefinitionTyStruct(StructFields);
+
+impl<'de> Deserialize<'de> for IdlTypeDefinitionTyStruct {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let fields = StructFields::deserialize(deserializer)?;
+        Ok(IdlTypeDefinitionTyStruct(fields))
+    }
+}
+
+impl Serialize for IdlTypeDefinitionTyStruct {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl From<Vec<IdlField>> for IdlTypeDefinitionTyStruct {
+    fn from(fields: Vec<IdlField>) -> Self {
+        IdlTypeDefinitionTyStruct(StructFields::Named(fields))
+    }
+}
+
+impl Into<Vec<IdlField>> for IdlTypeDefinitionTyStruct {
+    fn into(self) -> Vec<IdlField> {
+        match self.0 {
+            StructFields::Named(fields) => fields,
+            StructFields::Tuple(types) => {
+                // Convert tuple fields to unnamed fields for compatibility
+                types.into_iter().enumerate().map(|(i, ty)| {
+                    IdlField::new(format!("field_{}", i), None, ty)
+                }).collect()
+            }
+        }
+    }
+}
 
 #[richcmp_eq_only]
 #[common_methods]
@@ -505,12 +682,20 @@ pub struct IdlTypeDefinitionTyStruct(Vec<IdlField>);
 impl IdlTypeDefinitionTyStruct {
     #[new]
     pub fn new(fields: Vec<IdlField>) -> Self {
-        fields.into()
+        IdlTypeDefinitionTyStruct(StructFields::Named(fields))
     }
 
     #[getter]
     pub fn fields(&self) -> Vec<IdlField> {
-        self.0.clone()
+        match &self.0 {
+            StructFields::Named(fields) => fields.clone(),
+            StructFields::Tuple(types) => {
+                // Convert tuple fields to unnamed fields for Python access
+                types.iter().enumerate().map(|(i, ty)| {
+                    IdlField::new(format!("field_{}", i), None, ty.clone())
+                }).collect()
+            }
+        }
     }
 }
 
@@ -586,15 +771,15 @@ debug_display!(EnumFieldsTuple);
 #[derive(Debug, Clone, PartialEq, FromPyObject, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum EnumFields {
+    Tuple(EnumFieldsTuple),  // Try Tuple first since it's more common in new format
     Named(EnumFieldsNamed),
-    Tuple(EnumFieldsTuple),
 }
 
 impl From<EnumFields> for anchor_idl::types::EnumFields {
     fn from(t: EnumFields) -> Self {
         match t {
-            EnumFields::Named(n) => Self::Named(iter_into!(n.0)),
             EnumFields::Tuple(t) => Self::Tuple(iter_into!(t.0)),
+            EnumFields::Named(n) => Self::Named(iter_into!(n.0)),
         }
     }
 }
@@ -602,8 +787,8 @@ impl From<EnumFields> for anchor_idl::types::EnumFields {
 impl From<anchor_idl::types::EnumFields> for EnumFields {
     fn from(t: anchor_idl::types::EnumFields) -> Self {
         match t {
-            anchor_idl::types::EnumFields::Named(n) => Self::Named(EnumFieldsNamed(iter_into!(n))),
             anchor_idl::types::EnumFields::Tuple(t) => Self::Tuple(EnumFieldsTuple(iter_into!(t))),
+            anchor_idl::types::EnumFields::Named(n) => Self::Named(EnumFieldsNamed(iter_into!(n))),
         }
     }
 }
@@ -611,15 +796,72 @@ impl From<anchor_idl::types::EnumFields> for EnumFields {
 impl IntoPy<PyObject> for EnumFields {
     fn into_py(self, py: Python<'_>) -> PyObject {
         match self {
-            EnumFields::Named(x) => x.into_py(py),
             EnumFields::Tuple(x) => x.into_py(py),
+            EnumFields::Named(x) => x.into_py(py),
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq, From, Into, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 #[pyclass(module = "anchorpy_core.idl", subclass)]
-pub struct IdlEnumVariant(anchor_idl::types::IdlEnumVariant);
+pub struct IdlEnumVariant {
+    name: String,
+    fields: Option<EnumFields>,
+}
+
+// Custom deserialization to handle both old and new formats
+impl<'de> Deserialize<'de> for IdlEnumVariant {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct IdlEnumVariantHelper {
+            name: String,
+            fields: Option<EnumFields>,
+        }
+
+        let helper = IdlEnumVariantHelper::deserialize(deserializer)?;
+        Ok(IdlEnumVariant {
+            name: helper.name,
+            fields: helper.fields,
+        })
+    }
+}
+
+impl Serialize for IdlEnumVariant {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let field_count = if self.fields.is_some() { 2 } else { 1 };
+        let mut state = serializer.serialize_struct("IdlEnumVariant", field_count)?;
+        state.serialize_field("name", &self.name)?;
+        if let Some(ref fields) = self.fields {
+            state.serialize_field("fields", fields)?;
+        }
+        state.end()
+    }
+}
+
+impl From<IdlEnumVariant> for anchor_idl::types::IdlEnumVariant {
+    fn from(variant: IdlEnumVariant) -> Self {
+        anchor_idl::types::IdlEnumVariant {
+            name: variant.name,
+            fields: variant.fields.map(Into::into),
+        }
+    }
+}
+
+impl From<anchor_idl::types::IdlEnumVariant> for IdlEnumVariant {
+    fn from(variant: anchor_idl::types::IdlEnumVariant) -> Self {
+        IdlEnumVariant {
+            name: variant.name,
+            fields: variant.fields.map(Into::into),
+        }
+    }
+}
 
 #[richcmp_eq_only]
 #[common_methods]
@@ -627,21 +869,20 @@ pub struct IdlEnumVariant(anchor_idl::types::IdlEnumVariant);
 impl IdlEnumVariant {
     #[new]
     pub fn new(name: String, fields: Option<EnumFields>) -> Self {
-        anchor_idl::types::IdlEnumVariant {
+        IdlEnumVariant {
             name,
-            fields: fields.map(|f| f.into()),
+            fields,
         }
-        .into()
     }
 
     #[getter]
     pub fn name(&self) -> String {
-        self.0.name.clone()
+        self.name.clone()
     }
 
     #[getter]
     pub fn fields(&self) -> Option<EnumFields> {
-        self.0.fields.clone().map(|f| f.into())
+        self.fields.clone()
     }
 }
 
@@ -670,19 +911,79 @@ impl IdlTypeDefinitionTyEnum {
 struct_boilerplate!(IdlTypeDefinitionTyEnum);
 debug_display!(IdlTypeDefinitionTyEnum);
 
-#[derive(Debug, Clone, PartialEq, FromPyObject, Serialize, Deserialize)]
-#[serde(rename_all = "lowercase", tag = "kind")]
+#[derive(Debug, Clone, PartialEq, FromPyObject)]
 pub enum IdlTypeDefinitionTy {
     Struct(IdlTypeDefinitionTyStruct),
     Enum(IdlTypeDefinitionTyEnum),
     Alias(IdlTypeDefinitionTyAlias),
 }
 
+// Custom deserialization to handle the tagged enum with nested fields
+impl<'de> Deserialize<'de> for IdlTypeDefinitionTy {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        #[serde(rename_all = "lowercase", tag = "kind")]
+        enum IdlTypeDefinitionTyHelper {
+            Struct { fields: StructFields },
+            Enum { variants: Vec<IdlEnumVariant> },
+            Alias { value: IdlType },
+        }
+
+        let helper = IdlTypeDefinitionTyHelper::deserialize(deserializer)?;
+        Ok(match helper {
+            IdlTypeDefinitionTyHelper::Struct { fields } => {
+                IdlTypeDefinitionTy::Struct(IdlTypeDefinitionTyStruct(fields))
+            }
+            IdlTypeDefinitionTyHelper::Enum { variants } => {
+                IdlTypeDefinitionTy::Enum(IdlTypeDefinitionTyEnum(variants))
+            }
+            IdlTypeDefinitionTyHelper::Alias { value } => {
+                IdlTypeDefinitionTy::Alias(IdlTypeDefinitionTyAlias(value))
+            }
+        })
+    }
+}
+
+impl Serialize for IdlTypeDefinitionTy {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        match self {
+            IdlTypeDefinitionTy::Struct(s) => {
+                let mut state = serializer.serialize_struct("IdlTypeDefinitionTy", 2)?;
+                state.serialize_field("kind", "struct")?;
+                state.serialize_field("fields", &s.0)?;
+                state.end()
+            }
+            IdlTypeDefinitionTy::Enum(e) => {
+                let mut state = serializer.serialize_struct("IdlTypeDefinitionTy", 2)?;
+                state.serialize_field("kind", "enum")?;
+                state.serialize_field("variants", &e.0)?;
+                state.end()
+            }
+            IdlTypeDefinitionTy::Alias(a) => {
+                let mut state = serializer.serialize_struct("IdlTypeDefinitionTy", 2)?;
+                state.serialize_field("kind", "alias")?;
+                state.serialize_field("value", &a.0)?;
+                state.end()
+            }
+        }
+    }
+}
+
 impl From<IdlTypeDefinitionTy> for anchor_idl::types::IdlTypeDefinitionTy {
     fn from(t: IdlTypeDefinitionTy) -> Self {
         match t {
             IdlTypeDefinitionTy::Struct(s) => Self::Struct {
-                fields: iter_into!(s.0),
+                fields: {
+                    let fields_vec: Vec<IdlField> = s.into();
+                    iter_into!(fields_vec)
+                },
             },
             IdlTypeDefinitionTy::Enum(e) => Self::Enum {
                 variants: iter_into!(e.0),
@@ -696,7 +997,8 @@ impl From<anchor_idl::types::IdlTypeDefinitionTy> for IdlTypeDefinitionTy {
     fn from(t: anchor_idl::types::IdlTypeDefinitionTy) -> Self {
         match t {
             anchor_idl::types::IdlTypeDefinitionTy::Struct { fields } => {
-                Self::Struct(IdlTypeDefinitionTyStruct(iter_into!(fields)))
+                let fields_vec: Vec<IdlField> = iter_into!(fields);
+                Self::Struct(IdlTypeDefinitionTyStruct::from(fields_vec))
             }
             anchor_idl::types::IdlTypeDefinitionTy::Enum { variants } => {
                 Self::Enum(IdlTypeDefinitionTyEnum(iter_into!(variants)))
@@ -718,9 +1020,91 @@ impl IntoPy<PyObject> for IdlTypeDefinitionTy {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, From, Into, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq)]
 #[pyclass(module = "anchorpy_core.idl", subclass)]
-pub struct IdlTypeDefinition(anchor_idl::types::IdlTypeDefinition);
+pub struct IdlTypeDefinition {
+    name: String,
+    docs: Option<Vec<String>>,
+    ty: IdlTypeDefinitionTy,
+    generics: Option<Vec<String>>,
+    repr: Option<serde_json::Value>,  // New field for v0.1.0
+    serialization: Option<String>,     // New field for v0.1.0
+}
+
+// Custom deserialization to handle both old and new formats
+impl<'de> Deserialize<'de> for IdlTypeDefinition {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        #[derive(Deserialize)]
+        struct IdlTypeDefinitionHelper {
+            name: String,
+            docs: Option<Vec<String>>,
+            #[serde(rename = "type")]
+            ty: IdlTypeDefinitionTy,
+            generics: Option<Vec<String>>,
+            repr: Option<serde_json::Value>,     // New field for v0.1.0
+            serialization: Option<String>,        // New field for v0.1.0
+        }
+
+        let helper = IdlTypeDefinitionHelper::deserialize(deserializer)?;
+        Ok(IdlTypeDefinition {
+            name: helper.name,
+            docs: helper.docs,
+            ty: helper.ty,
+            generics: helper.generics,
+            repr: helper.repr,
+            serialization: helper.serialization,
+        })
+    }
+}
+
+impl Serialize for IdlTypeDefinition {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let field_count = 4 + self.repr.is_some() as usize + self.serialization.is_some() as usize;
+        let mut state = serializer.serialize_struct("IdlTypeDefinition", field_count)?;
+        state.serialize_field("name", &self.name)?;
+        state.serialize_field("docs", &self.docs)?;
+        state.serialize_field("type", &self.ty)?;
+        state.serialize_field("generics", &self.generics)?;
+        if let Some(ref repr) = self.repr {
+            state.serialize_field("repr", repr)?;
+        }
+        if let Some(ref serialization) = self.serialization {
+            state.serialize_field("serialization", serialization)?;
+        }
+        state.end()
+    }
+}
+
+impl From<IdlTypeDefinition> for anchor_idl::types::IdlTypeDefinition {
+    fn from(def: IdlTypeDefinition) -> Self {
+        anchor_idl::types::IdlTypeDefinition {
+            name: def.name,
+            docs: def.docs,
+            ty: def.ty.into(),
+            generics: def.generics,
+        }
+    }
+}
+
+impl From<anchor_idl::types::IdlTypeDefinition> for IdlTypeDefinition {
+    fn from(def: anchor_idl::types::IdlTypeDefinition) -> Self {
+        IdlTypeDefinition {
+            name: def.name,
+            docs: def.docs,
+            ty: def.ty.into(),
+            generics: def.generics,
+            repr: None,          // Old format doesn't have these
+            serialization: None,
+        }
+    }
+}
 
 #[richcmp_eq_only]
 #[common_methods]
@@ -733,28 +1117,51 @@ impl IdlTypeDefinition {
         ty: IdlTypeDefinitionTy,
         generics: Option<Vec<String>>,
     ) -> Self {
-        anchor_idl::types::IdlTypeDefinition {
+        IdlTypeDefinition {
             name,
             docs,
-            ty: ty.into(),
+            ty,
             generics,
+            repr: None,
+            serialization: None,
         }
-        .into()
     }
 
     #[getter]
     pub fn name(&self) -> String {
-        self.0.name.clone()
+        self.name.clone()
     }
 
     #[getter]
     pub fn docs(&self) -> Option<Vec<String>> {
-        self.0.docs.clone()
+        self.docs.clone()
     }
 
     #[getter]
     pub fn ty(&self) -> IdlTypeDefinitionTy {
-        self.0.ty.clone().into()
+        self.ty.clone()
+    }
+
+    #[getter]
+    pub fn generics(&self) -> Option<Vec<String>> {
+        self.generics.clone()
+    }
+
+    #[getter]
+    pub fn repr(&self, py: Python) -> PyResult<Option<PyObject>> {
+        match &self.repr {
+            Some(value) => {
+                // Convert serde_json::Value to PyObject
+                let py_value = pythonize::pythonize(py, value)?;
+                Ok(Some(py_value))
+            }
+            None => Ok(None)
+        }
+    }
+
+    #[getter]
+    pub fn serialization(&self) -> Option<String> {
+        self.serialization.clone()
     }
 }
 
@@ -768,23 +1175,8 @@ pub enum IdlAccountItem {
     IdlAccounts(IdlAccounts),
 }
 
-impl From<IdlAccountItem> for anchor_idl::types::IdlAccountItem {
-    fn from(a: IdlAccountItem) -> Self {
-        match a {
-            IdlAccountItem::IdlAccount(x) => Self::IdlAccount(x.into()),
-            IdlAccountItem::IdlAccounts(x) => Self::IdlAccounts(x.into()),
-        }
-    }
-}
-
-impl From<anchor_idl::types::IdlAccountItem> for IdlAccountItem {
-    fn from(a: anchor_idl::types::IdlAccountItem) -> Self {
-        match a {
-            anchor_idl::types::IdlAccountItem::IdlAccount(x) => Self::IdlAccount(x.into()),
-            anchor_idl::types::IdlAccountItem::IdlAccounts(x) => Self::IdlAccounts(x.into()),
-        }
-    }
-}
+// Note: We can't directly convert from our custom IdlAccount to anchor_idl::types::IdlAccount
+// since we've modified the struct. We'll handle this at a higher level if needed.
 
 impl IntoPy<PyObject> for IdlAccountItem {
     fn into_py(self, py: Python<'_>) -> PyObject {
@@ -795,9 +1187,12 @@ impl IntoPy<PyObject> for IdlAccountItem {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, From, Into, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[pyclass(module = "anchorpy_core.idl", subclass)]
-pub struct IdlAccounts(anchor_idl::types::IdlAccounts);
+pub struct IdlAccounts {
+    pub name: String,
+    pub accounts: Vec<IdlAccountItem>,
+}
 
 #[richcmp_eq_only]
 #[common_methods]
@@ -805,21 +1200,20 @@ pub struct IdlAccounts(anchor_idl::types::IdlAccounts);
 impl IdlAccounts {
     #[new]
     pub fn new(name: String, accounts: Vec<IdlAccountItem>) -> Self {
-        anchor_idl::types::IdlAccounts {
+        IdlAccounts {
             name,
-            accounts: iter_into!(accounts),
+            accounts,
         }
-        .into()
     }
 
     #[getter]
     pub fn name(&self) -> String {
-        self.0.name.clone()
+        self.name.clone()
     }
 
     #[getter]
     pub fn accounts(&self) -> Vec<IdlAccountItem> {
-        iter_into!(self.0.accounts.clone())
+        self.accounts.clone()
     }
 }
 
@@ -995,9 +1389,27 @@ impl IdlPda {
 struct_boilerplate!(IdlPda);
 debug_display!(IdlPda);
 
-#[derive(Debug, Clone, PartialEq, From, Into, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[pyclass(module = "anchorpy_core.idl", subclass)]
-pub struct IdlAccount(anchor_idl::types::IdlAccount);
+pub struct IdlAccount {
+    pub name: String,
+
+    #[serde(default, alias = "isMut", alias = "is_mut")]
+    pub is_mut: bool,
+
+    #[serde(default, alias = "isSigner", alias = "is_signer")]
+    pub is_signer: bool,
+
+    #[serde(alias = "isOptional")]
+    pub is_optional: Option<bool>,
+
+    pub docs: Option<Vec<String>>,
+
+    pub pda: Option<IdlPda>,
+
+    #[serde(default)]
+    pub relations: Vec<String>,
+}
 
 #[richcmp_eq_only]
 #[common_methods]
@@ -1013,60 +1425,79 @@ impl IdlAccount {
         pda: Option<IdlPda>,
         relations: Vec<String>,
     ) -> Self {
-        anchor_idl::types::IdlAccount {
+        IdlAccount {
             name,
             is_mut,
             is_signer,
             is_optional,
             docs,
-            pda: pda.map(|x| x.into()),
+            pda,
             relations,
         }
-        .into()
     }
 
     #[getter]
     pub fn name(&self) -> String {
-        self.0.name.clone()
+        self.name.clone()
     }
 
     #[getter]
     pub fn is_mut(&self) -> bool {
-        self.0.is_mut
+        self.is_mut
+    }
+
+    #[getter]
+    pub fn isMut(&self) -> bool {
+        self.is_mut
     }
 
     #[getter]
     pub fn is_signer(&self) -> bool {
-        self.0.is_signer
+        self.is_signer
+    }
+
+    #[getter]
+    pub fn isSigner(&self) -> bool {
+        self.is_signer
     }
 
     #[getter]
     pub fn is_optional(&self) -> Option<bool> {
-        self.0.is_optional
+        self.is_optional
     }
 
     #[getter]
     pub fn docs(&self) -> Option<Vec<String>> {
-        self.0.docs.clone()
+        self.docs.clone()
     }
 
     #[getter]
     pub fn pda(&self) -> Option<IdlPda> {
-        self.0.pda.clone().map(|x| x.into())
+        self.pda.clone()
     }
 
     #[getter]
     pub fn relations(&self) -> Vec<String> {
-        self.0.relations.clone()
+        self.relations.clone()
     }
 }
 
 struct_boilerplate!(IdlAccount);
 debug_display!(IdlAccount);
 
-#[derive(Debug, Clone, PartialEq, From, Into, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[pyclass(module = "anchorpy_core.idl", subclass)]
-pub struct IdlInstruction(anchor_idl::types::IdlInstruction);
+pub struct IdlInstruction {
+    pub name: String,
+    pub docs: Option<Vec<String>>,
+    pub accounts: Vec<IdlAccountItem>,
+    pub args: Vec<IdlField>,
+    pub returns: Option<IdlType>,
+
+    // New format: discriminator field (optional)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discriminator: Option<Vec<u8>>,
+}
 
 #[richcmp_eq_only]
 #[common_methods]
@@ -1080,48 +1511,56 @@ impl IdlInstruction {
         args: Vec<IdlField>,
         returns: Option<IdlType>,
     ) -> Self {
-        anchor_idl::types::IdlInstruction {
+        IdlInstruction {
             name,
             docs,
-            accounts: iter_into!(accounts),
-            args: iter_into!(args),
-            returns: returns.map(|x| x.into()),
+            accounts,
+            args,
+            returns,
+            discriminator: None,
         }
-        .into()
     }
 
     #[getter]
     pub fn name(&self) -> String {
-        self.0.name.clone()
+        self.name.clone()
     }
 
     #[getter]
     pub fn docs(&self) -> Option<Vec<String>> {
-        self.0.docs.clone()
+        self.docs.clone()
     }
 
     #[getter]
     pub fn accounts(&self) -> Vec<IdlAccountItem> {
-        iter_into!(self.0.accounts.clone())
+        self.accounts.clone()
     }
 
     #[getter]
     pub fn args(&self) -> Vec<IdlField> {
-        iter_into!(self.0.args.clone())
+        self.args.clone()
     }
 
     #[getter]
     pub fn returns(&self) -> Option<IdlType> {
-        self.0.returns.clone().map(|x| x.into())
+        self.returns.clone()
+    }
+
+    #[getter]
+    pub fn discriminator(&self) -> Option<Vec<u8>> {
+        self.discriminator.clone()
     }
 }
 
 struct_boilerplate!(IdlInstruction);
 debug_display!(IdlInstruction);
 
-#[derive(Debug, Clone, PartialEq, From, Into, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[pyclass(module = "anchorpy_core.idl", subclass)]
-pub struct IdlState(anchor_idl::types::IdlState);
+pub struct IdlState {
+    pub strct: IdlTypeDefinition,
+    pub methods: Vec<IdlInstruction>,
+}
 
 #[richcmp_eq_only]
 #[common_methods]
@@ -1129,30 +1568,79 @@ pub struct IdlState(anchor_idl::types::IdlState);
 impl IdlState {
     #[new]
     pub fn new(strct: IdlTypeDefinition, methods: Vec<IdlInstruction>) -> Self {
-        anchor_idl::types::IdlState {
-            strct: strct.into(),
-            methods: iter_into!(methods),
+        IdlState {
+            strct,
+            methods,
         }
-        .into()
     }
 
     #[getter]
     pub fn strct(&self) -> IdlTypeDefinition {
-        self.0.strct.clone().into()
+        self.strct.clone()
     }
 
     #[getter]
     pub fn methods(&self) -> Vec<IdlInstruction> {
-        iter_into!(self.0.methods.clone())
+        self.methods.clone()
     }
 }
 
 struct_boilerplate!(IdlState);
 debug_display!(IdlState);
 
-#[derive(Debug, Clone, PartialEq, From, Into, Serialize, Deserialize)]
+// Flexible event entry that supports both old and new IDL formats
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum IdlEventEntry {
+    // New format: minimal entry with just name and discriminator
+    Minimal {
+        name: String,
+        discriminator: Vec<u8>,
+    },
+    // Old format: full event definition with fields
+    Full(IdlEvent),
+}
+
+impl IdlEventEntry {
+    pub fn name(&self) -> String {
+        match self {
+            IdlEventEntry::Minimal { name, .. } => name.clone(),
+            IdlEventEntry::Full(event) => event.name.clone(),
+        }
+    }
+
+    pub fn discriminator(&self) -> Option<Vec<u8>> {
+        match self {
+            IdlEventEntry::Minimal { discriminator, .. } => Some(discriminator.clone()),
+            IdlEventEntry::Full(event) => event.discriminator.clone(),
+        }
+    }
+}
+
+impl IntoPy<PyObject> for IdlEventEntry {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        match self {
+            IdlEventEntry::Minimal { name, discriminator } => {
+                let dict = pyo3::types::PyDict::new(py);
+                dict.set_item("name", name).unwrap();
+                dict.set_item("discriminator", discriminator).unwrap();
+                dict.to_object(py)
+            }
+            IdlEventEntry::Full(event) => event.into_py(py),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[pyclass(module = "anchorpy_core.idl", subclass)]
-pub struct IdlEvent(anchor_idl::types::IdlEvent);
+pub struct IdlEvent {
+    pub name: String,
+    pub fields: Vec<IdlEventField>,
+
+    // New format: discriminator field (optional)
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub discriminator: Option<Vec<u8>>,
+}
 
 #[richcmp_eq_only]
 #[common_methods]
@@ -1160,21 +1648,26 @@ pub struct IdlEvent(anchor_idl::types::IdlEvent);
 impl IdlEvent {
     #[new]
     pub fn new(name: String, fields: Vec<IdlEventField>) -> Self {
-        anchor_idl::types::IdlEvent {
+        IdlEvent {
             name,
-            fields: iter_into!(fields),
+            fields,
+            discriminator: None,
         }
-        .into()
     }
 
     #[getter]
     pub fn name(&self) -> String {
-        self.0.name.clone()
+        self.name.clone()
     }
 
     #[getter]
     pub fn fields(&self) -> Vec<IdlEventField> {
-        iter_into!(self.0.fields.clone())
+        self.fields.clone()
+    }
+
+    #[getter]
+    pub fn discriminator(&self) -> Option<Vec<u8>> {
+        self.discriminator.clone()
     }
 }
 
@@ -1250,9 +1743,92 @@ impl IdlErrorCode {
 struct_boilerplate!(IdlErrorCode);
 debug_display!(IdlErrorCode);
 
-#[derive(Debug, Clone, PartialEq, From, Into, Serialize, Deserialize)]
+// Flexible account entry that supports both old and new IDL formats
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum IdlAccountEntry {
+    // New format: minimal entry with just name and discriminator
+    // Try this first as it's more restrictive (requires discriminator field)
+    Minimal {
+        name: String,
+        discriminator: Vec<u8>,
+    },
+    // Old format: full type definition
+    // Try this second as it's more permissive
+    Full(IdlTypeDefinition),
+}
+
+impl IdlAccountEntry {
+    pub fn name(&self) -> String {
+        match self {
+            IdlAccountEntry::Minimal { name, .. } => name.clone(),
+            IdlAccountEntry::Full(def) => def.name(),
+        }
+    }
+
+    pub fn discriminator(&self) -> Option<Vec<u8>> {
+        match self {
+            IdlAccountEntry::Minimal { discriminator, .. } => Some(discriminator.clone()),
+            IdlAccountEntry::Full(_) => None,
+        }
+    }
+}
+
+impl IntoPy<PyObject> for IdlAccountEntry {
+    fn into_py(self, py: Python<'_>) -> PyObject {
+        match self {
+            IdlAccountEntry::Minimal { name, discriminator } => {
+                let dict = pyo3::types::PyDict::new(py);
+                dict.set_item("name", name).unwrap();
+                dict.set_item("discriminator", discriminator).unwrap();
+                dict.to_object(py)
+            }
+            IdlAccountEntry::Full(def) => def.into_py(py),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[pyclass(module = "anchorpy_core.idl", subclass)]
-pub struct Idl(anchor_idl::types::Idl);
+pub struct Idl {
+    #[serde(default)]
+    pub version: Option<String>,
+
+    #[serde(default)]
+    pub name: Option<String>,
+
+    #[serde(default)]
+    pub address: Option<String>,
+
+    #[serde(default)]
+    pub docs: Option<Vec<String>>,
+
+    #[serde(default)]
+    pub constants: Vec<IdlConst>,
+
+    #[serde(default)]
+    pub instructions: Vec<IdlInstruction>,
+
+    #[serde(default)]
+    pub accounts: Vec<IdlAccountEntry>,
+
+    #[serde(default)]
+    pub types: Vec<IdlTypeDefinition>,
+
+    #[serde(default)]
+    pub events: Option<Vec<IdlEventEntry>>,
+
+    #[serde(default)]
+    pub errors: Option<Vec<IdlErrorCode>>,
+
+    #[serde(default = "default_metadata")]
+    pub metadata: Value,
+}
+
+// Default function for metadata field
+fn default_metadata() -> Value {
+    Value::Object(serde_json::Map::new())
+}
 
 #[richcmp_eq_only]
 #[common_methods]
@@ -1261,72 +1837,101 @@ impl Idl {
     #[allow(clippy::too_many_arguments)]
     #[new]
     pub fn new(
-        version: String,
-        name: String,
+        version: Option<String>,
+        name: Option<String>,
         docs: Option<Vec<String>>,
         constants: Vec<IdlConst>,
         instructions: Vec<IdlInstruction>,
-        accounts: Vec<IdlTypeDefinition>,
+        accounts: Vec<IdlTypeDefinition>,  // Keep as IdlTypeDefinition for backward compatibility
         types: Vec<IdlTypeDefinition>,
         events: Option<Vec<IdlEvent>>,
         errors: Option<Vec<IdlErrorCode>>,
         metadata: &PyAny,
     ) -> PyResult<Self> {
         let parsed_metadata = handle_py_value_err(depythonize::<Value>(metadata))?;
-        Ok(anchor_idl::types::Idl {
+        // Convert IdlTypeDefinition to IdlAccountEntry::Full for backward compatibility
+        let account_entries: Vec<IdlAccountEntry> = accounts
+            .into_iter()
+            .map(IdlAccountEntry::Full)
+            .collect();
+        // Convert IdlEvent to IdlEventEntry::Full for backward compatibility
+        let event_entries: Option<Vec<IdlEventEntry>> = events.map(|evts| {
+            evts.into_iter()
+                .map(IdlEventEntry::Full)
+                .collect()
+        });
+        Ok(Idl {
             version,
             name,
+            address: None,  // Default to None for backward compatibility
             docs,
-            constants: iter_into!(constants),
-            instructions: iter_into!(instructions),
-            accounts: iter_into!(accounts),
-            types: iter_into!(types),
-            events: events.map(|x| iter_into!(x)),
-            errors: errors.map(|x| iter_into!(x)),
+            constants,
+            instructions,
+            accounts: account_entries,
+            types,
+            events: event_entries,
+            errors,
             metadata: parsed_metadata,
-        }
-        .into())
+        })
     }
 
     #[getter]
-    pub fn version(&self) -> String {
-        self.0.version.clone()
+    pub fn version(&self) -> Option<String> {
+        self.version.clone()
     }
     #[getter]
-    pub fn name(&self) -> String {
-        self.0.name.clone()
+    pub fn name(&self) -> Option<String> {
+        self.name.clone()
+    }
+    #[getter]
+    pub fn address(&self) -> Option<String> {
+        self.address.clone()
     }
     #[getter]
     pub fn docs(&self) -> Option<Vec<String>> {
-        self.0.docs.clone()
+        self.docs.clone()
     }
     #[getter]
     pub fn constants(&self) -> Vec<IdlConst> {
-        iter_into!(self.0.constants.clone())
+        self.constants.clone()
     }
     #[getter]
     pub fn instructions(&self) -> Vec<IdlInstruction> {
-        iter_into!(self.0.instructions.clone())
+        self.instructions.clone()
     }
     #[getter]
-    pub fn accounts(&self) -> Vec<IdlTypeDefinition> {
-        iter_into!(self.0.accounts.clone())
+    pub fn accounts(&self, py: Python<'_>) -> PyObject {
+        // Convert IdlAccountEntry to Python objects
+        let list = pyo3::types::PyList::empty(py);
+        for entry in &self.accounts {
+            list.append(entry.clone().into_py(py)).unwrap();
+        }
+        list.to_object(py)
     }
     #[getter]
     pub fn types(&self) -> Vec<IdlTypeDefinition> {
-        iter_into!(self.0.types.clone())
+        self.types.clone()
     }
     #[getter]
-    pub fn events(&self) -> Option<Vec<IdlEvent>> {
-        self.0.events.clone().map(|x| iter_into!(x))
+    pub fn events(&self, py: Python<'_>) -> PyObject {
+        match &self.events {
+            Some(events) => {
+                let list = pyo3::types::PyList::empty(py);
+                for entry in events {
+                    list.append(entry.clone().into_py(py)).unwrap();
+                }
+                list.to_object(py)
+            }
+            None => py.None()
+        }
     }
     #[getter]
     pub fn errors(&self) -> Option<Vec<IdlErrorCode>> {
-        self.0.errors.clone().map(|x| iter_into!(x))
+        self.errors.clone()
     }
     #[getter]
     pub fn metadata(&self, py: Python<'_>) -> PyResult<PyObject> {
-        handle_py_value_err(pythonize(py, &self.0.metadata))
+        handle_py_value_err(pythonize(py, &self.metadata))
     }
 }
 
