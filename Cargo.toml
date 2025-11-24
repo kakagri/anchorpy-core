@@ -10,7 +10,7 @@ repository = "https://github.com/kakagri/anchorpy-core"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]
-name = "anchorpy_core"
+name = "anchorpy3_core"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]

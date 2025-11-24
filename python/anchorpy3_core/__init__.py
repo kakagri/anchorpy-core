@@ -1,4 +1,4 @@
-from anchorpy_core.anchorpy_core import (  # type: ignore
+from anchorpy3_core.anchorpy3_core import (  # type: ignore
     idl,
     __version__ as _version_untyped,
 )
