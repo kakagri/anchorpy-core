@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "anchorpy3_core"
-version = "0.3.0"
+version = "0.3.2"
 description = "Python bindings for Anchor Rust code"
 authors = [
     {name = "Kevin Heavey", email = "kevinheavey123@gmail.com"},
@@ -34,7 +34,7 @@ changelog = "https://github.com/kakagri/anchorpy-core/blob/main/CHANGELOG.md"
 
 [tool.maturin]
 python-source = "python"
-module-name = "anchorpy3_core.anchorpy3_core"
+module-name = "anchorpy_core.anchorpy_core"
 
 [tool.mypy]
 enable_recursive_aliases = true

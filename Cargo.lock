@@ -54,7 +54,7 @@ dependencies = [
 
 [[package]]
 name = "anchorpy_core"
-version = "0.3.0"
+version = "0.3.2"
 dependencies = [
  "anchor-syn",
  "derive_more",
