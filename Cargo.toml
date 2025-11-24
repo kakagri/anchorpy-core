@@ -1,11 +1,12 @@
 [package]
 name = "anchorpy_core"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 include = ["/src", "/LICENSE", "/pyproject.toml"]
 description = "Python bindings for Anchor Rust code"
+authors = ["Kevin Heavey <kevinheavey123@gmail.com>", "Khaled G <kh.grira@gmail.com>"]
 license = "Apache-2.0"
-repository = "https://github.com/kevinheavey/anchorpy-core"
+repository = "https://github.com/kakagri/anchorpy-core"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [lib]

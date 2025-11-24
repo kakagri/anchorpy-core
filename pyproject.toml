@@ -1,47 +1,40 @@
-[tool.poetry]
-name = "anchorpy-core"
-version = "0.2.0"
-description = "Python bindings for Anchor Rust code"
-authors = ["Kevin Heavey <kevinheavey123@gmail.com>"]
-license = "Apache-2.0"
-
-[tool.poetry.dependencies]
-python = "^3.9"
-
-[tool.poetry.dev-dependencies]
-maturin = "^0.13.6"
-black = "^22.10.0"
-mypy = "^0.982"
-pytest = "^7.2.0"
-flake8 = "^5.0.4"
-bump2version = "^1.0.1"
-jsonalias = "^0.1.1"
-
-[tool.mypy]
-enable_recursive_aliases = true
-
 [build-system]
 requires = ["maturin>=0.13.6,<0.14"]
 build-backend = "maturin"
 
 [project]
-name = "anchorpy-core"
-version = "0.2.0"
+name = "anchorpy_core3"
+version = "0.3.0"
 description = "Python bindings for Anchor Rust code"
-authors = [ {name = "kevinheavey", email = "kevinheavey123@gmail.com"} ]
+authors = [
+    {name = "Kevin Heavey", email = "kevinheavey123@gmail.com"},
+    {name = "Khaled G", email = "kh.grira@gmail.com"}
+]
+maintainers = [ {name = "Khaled G", email = "kh.grira@gmail.com"} ]
 license = {file = "LICENSE"}
 requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Rust",
     "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: Apache Software License",
+    "Development Status :: 4 - Beta",
 ]
-dependencies = ["jsonalias ==0.1.1"]
+dependencies = ["jsonalias>=0.1.1,<0.2"]
+readme = "README.md"
 
 [project.urls]
-homepage = "https://github.com/kevinheavey/anchorpy-core"
-documentation = "https://kevinheavey.github.io/anchorpy-core/"
-repository = "https://github.com/kevinheavey/anchorpy-core"
-changelog = "https://github.com/kevinheavey/anchorpy-core/blob/main/CHANGELOG.md"
+homepage = "https://github.com/kakagri/anchorpy-core"
+documentation = "https://docs.rs/anchorpy_core/"
+repository = "https://github.com/kakagri/anchorpy-core"
+changelog = "https://github.com/kakagri/anchorpy-core/blob/main/CHANGELOG.md"
 
 [tool.maturin]
 python-source = "python"
+module-name = "anchorpy_core.anchorpy_core"
+
+[tool.mypy]
+enable_recursive_aliases = true
