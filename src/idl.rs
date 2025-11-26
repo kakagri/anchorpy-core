@@ -1447,6 +1447,7 @@ impl IdlAccount {
     }
 
     #[getter]
+    #[allow(non_snake_case)]
     pub fn isMut(&self) -> bool {
         self.is_mut
     }
@@ -1457,6 +1458,7 @@ impl IdlAccount {
     }
 
     #[getter]
+    #[allow(non_snake_case)]
     pub fn isSigner(&self) -> bool {
         self.is_signer
     }
@@ -1938,7 +1940,7 @@ impl Idl {
 struct_boilerplate!(Idl);
 debug_display!(Idl);
 
-pub(crate) fn create_idl_mod(py: Python) -> PyResult<&PyModule> {
+pub(crate) fn create_idl_mod(py: Python<'_>) -> PyResult<&PyModule> {
     let m = PyModule::new(py, "idl")?;
     m.add_class::<IdlTypeSimple>()?;
     m.add_class::<IdlTypeDefined>()?;
