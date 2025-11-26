@@ -1,6 +1,6 @@
 [package]
 name = "anchorpy_core"
-version = "0.3.3"
+version = "0.3.4"
 edition = "2021"
 include = ["/src", "/LICENSE", "/pyproject.toml"]
 description = "Python bindings for Anchor Rust code"

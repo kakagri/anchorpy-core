@@ -1171,8 +1171,8 @@ debug_display!(IdlTypeDefinition);
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, FromPyObject)]
 #[serde(untagged)]
 pub enum IdlAccountItem {
+    IdlAccounts(IdlAccounts),  // More restrictive - try first
     IdlAccount(IdlAccount),
-    IdlAccounts(IdlAccounts),
 }
 
 // Note: We can't directly convert from our custom IdlAccount to anchor_idl::types::IdlAccount
