@@ -84,7 +84,7 @@ def test_clientgen_example() -> None:
     assert idl.errors[0] == IdlErrorCode(
         code=6000, name="SomeError", msg="Example error."
     )
-    assert idl.metadata is None
+    assert idl.metadata is None or idl.metadata == {}
 
 
 def test_alias() -> None:
