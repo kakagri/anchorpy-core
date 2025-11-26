@@ -9,7 +9,7 @@ on:
   workflow_call:  # Allow being called from release workflow
 
 env:
-  PACKAGE_NAME: anchorpy_core
+  PACKAGE_NAME: anchorpy3_core
   PYTHON_VERSION: "3.10"
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: "-D warnings"
