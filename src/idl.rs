@@ -435,10 +435,37 @@ pub enum IdlTypeCompat {
     OptionWrapped { option: Box<IdlTypeCompat> },
     VecWrapped { vec: Box<IdlTypeCompat> },
     ArrayWrapped { array: (Box<IdlTypeCompat>, usize) },
-    GenericLenArrayWrapped { array: (Box<IdlTypeCompat>, String) },
+    GenericLenArrayWrapped {
+        #[serde(rename = "genericLenArray")]
+        array: (Box<IdlTypeCompat>, String),
+    },
     DefinedWrapped { defined: DefinedValue },
+    DefinedWithTypeArgsWrapped {
+        #[serde(rename = "definedWithTypeArgs")]
+        defined_with_type_args: DefinedWithTypeArgs,
+    },
     GenericWrapped { generic: String },
     Simple(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct DefinedWithTypeArgs {
+    pub name: String,
+    #[serde(default)]
+    pub args: Vec<GenericArgCompat>,
+}
+
+/// Generic argument — either `{"type": "u32"}` or `{"value": "10"}`
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum GenericArgCompat {
+    Type {
+        #[serde(rename = "type")]
+        ty: IdlTypeCompat,
+    },
+    Const {
+        value: String,
+    },
 }
 
 impl From<IdlTypeCompat> for anchor_idl::types::IdlType {
@@ -483,6 +510,15 @@ impl From<IdlTypeCompat> for anchor_idl::types::IdlType {
             IdlTypeCompat::GenericLenArrayWrapped { array } => {
                 Self::Array(Box::new((*array.0).into()), anchor_idl::types::IdlArrayLen::Generic(array.1))
             }
+            IdlTypeCompat::DefinedWithTypeArgsWrapped { defined_with_type_args } => {
+                Self::Defined {
+                    name: defined_with_type_args.name,
+                    generics: defined_with_type_args.args.into_iter().map(|a| match a {
+                        GenericArgCompat::Type { ty } => anchor_idl::types::IdlGenericArg::Type { ty: ty.into() },
+                        GenericArgCompat::Const { value } => anchor_idl::types::IdlGenericArg::Const { value },
+                    }).collect(),
+                }
+            }
             IdlTypeCompat::GenericWrapped { generic } => Self::Generic(generic),
         }
     }
@@ -518,6 +554,8 @@ pub struct IdlTypeDefinitionCompat {
     pub name: String,
     #[serde(default)]
     pub docs: Option<Vec<String>>,
+    #[serde(default)]
+    pub generics: Vec<String>,
     #[serde(rename = "type")]
     pub ty: IdlTypeDefinitionTyCompat,
 }
@@ -529,7 +567,9 @@ impl From<IdlTypeDefinitionCompat> for anchor_idl::types::IdlTypeDef {
             docs: def.docs.unwrap_or_default(),
             serialization: anchor_idl::types::IdlSerialization::Borsh,
             repr: None,
-            generics: vec![],
+            generics: def.generics.into_iter().map(|g| {
+                anchor_idl::types::IdlTypeDefGeneric::Type { name: g }
+            }).collect(),
             ty: def.ty.into(),
         }
     }
