@@ -86,11 +86,11 @@ impl From<IdlAccountItemCompat> for anchor_idl::types::IdlInstructionAccountItem
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IdlAccountCompat {
     pub name: String,
-    #[serde(default)]
+    #[serde(default, alias = "isMut")]
     pub is_mut: bool,
-    #[serde(default)]
+    #[serde(default, alias = "isSigner")]
     pub is_signer: bool,
-    #[serde(default)]
+    #[serde(default, alias = "isOptional")]
     pub is_optional: Option<bool>,
     #[serde(default)]
     pub docs: Option<Vec<String>>,
@@ -177,12 +177,13 @@ pub enum IdlSeedTagged {
     },
 }
 
-/// The `value` of a const seed can be a byte array (new format) or a string
-/// (old format passed through the tagged path, unlikely but handled).
+/// The `value` of a const seed can be a byte array (new format), a string,
+/// or an integer (old format seeds with numeric types like u8, u32, u64).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum SeedConstValue {
     Bytes(Vec<u8>),
+    Int(u64),
     Str(String),
 }
 
@@ -193,6 +194,7 @@ impl From<IdlSeedCompat> for anchor_idl::types::IdlSeed {
                 IdlSeedTagged::Const { value } => {
                     let bytes = match value {
                         SeedConstValue::Bytes(b) => b,
+                        SeedConstValue::Int(n) => n.to_le_bytes().to_vec(),
                         SeedConstValue::Str(s) => s.into_bytes(),
                     };
                     Self::Const(anchor_idl::types::IdlSeedConst { value: bytes })
@@ -339,6 +341,36 @@ impl From<IdlCompat> for anchor_idl::types::Idl {
             }
         }
 
+        // For old-format events that carry inline field definitions,
+        // inject those into `types` so the Python adapter can resolve them.
+        let mut events = Vec::new();
+        for event in idl.events.unwrap_or_default() {
+            let disc = event.discriminator.clone().unwrap_or_default();
+            events.push(anchor_idl::types::IdlEvent {
+                name: event.name.clone(),
+                discriminator: disc,
+            });
+            // If this event has inline fields AND there isn't already a type
+            // with the same name, inject a struct typedef.
+            if let Some(fields) = event.fields {
+                let already_exists = types.iter().any(|t| t.name == event.name);
+                if !already_exists {
+                    types.push(anchor_idl::types::IdlTypeDef {
+                        name: event.name,
+                        docs: event.docs.unwrap_or_default(),
+                        serialization: anchor_idl::types::IdlSerialization::Borsh,
+                        repr: None,
+                        generics: vec![],
+                        ty: anchor_idl::types::IdlTypeDefTy::Struct {
+                            fields: Some(anchor_idl::types::IdlDefinedFields::Named(
+                                fields.into_iter().map(|f| f.into()).collect()
+                            )),
+                        },
+                    });
+                }
+            }
+        }
+
         Self {
             address: idl.address.unwrap_or_default(),
             metadata: anchor_idl::types::IdlMetadata {
@@ -354,7 +386,7 @@ impl From<IdlCompat> for anchor_idl::types::Idl {
             docs: idl.docs.unwrap_or_default(),
             instructions: idl.instructions.into_iter().map(|i| i.into()).collect(),
             accounts,
-            events: idl.events.unwrap_or_default().into_iter().map(|e| e.into()).collect(),
+            events,
             errors: idl.errors.unwrap_or_default().into_iter().map(|e| e.into()).collect(),
             types,
             constants: idl.constants.into_iter().map(|c| c.into()).collect(),
