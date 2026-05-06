@@ -1,0 +1,161 @@
+{
+  "address": "22222222222222222222222222222222",
+  "metadata": {
+    "name": "accounts_events_program",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "initialize",
+      "discriminator": [175, 175, 109, 31, 13, 152, 155, 237],
+      "accounts": [
+        {
+          "name": "state",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "payer",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "system_program",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "bool_field",
+          "type": "bool"
+        },
+        {
+          "name": "u8_field",
+          "type": "u8"
+        },
+        {
+          "name": "pubkey_field",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "update_state",
+      "discriminator": [18, 22, 33, 44, 55, 66, 77, 88],
+      "accounts": [
+        {
+          "name": "state",
+          "writable": true
+        },
+        {
+          "name": "authority",
+          "signer": true
+        }
+      ],
+      "args": [
+        {
+          "name": "new_value",
+          "type": "u64"
+        }
+      ]
+    }
+  ],
+  "accounts": [
+    {
+      "name": "State",
+      "discriminator": [216, 146, 107, 94, 104, 75, 182, 177]
+    }
+  ],
+  "events": [
+    {
+      "name": "StateUpdated",
+      "discriminator": [58, 183, 22, 192, 11, 98, 44, 203]
+    }
+  ],
+  "errors": [
+    {
+      "code": 6000,
+      "name": "InvalidAuthority",
+      "msg": "Invalid authority"
+    }
+  ],
+  "types": [
+    {
+      "name": "State",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "bool_field",
+            "type": "bool"
+          },
+          {
+            "name": "u8_field",
+            "type": "u8"
+          },
+          {
+            "name": "pubkey_field",
+            "type": "pubkey"
+          },
+          {
+            "name": "authority",
+            "type": "pubkey"
+          }
+        ]
+      }
+    },
+    {
+      "name": "StateUpdated",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "old_value",
+            "type": "u64"
+          },
+          {
+            "name": "new_value",
+            "type": "u64"
+          }
+        ]
+      }
+    },
+    {
+      "name": "MyEnum",
+      "type": {
+        "kind": "enum",
+        "variants": [
+          { "name": "Active" },
+          { "name": "Inactive" },
+          {
+            "name": "Custom",
+            "fields": [
+              {
+                "name": "value",
+                "type": "u64"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "name": "BarStruct",
+      "type": {
+        "kind": "struct",
+        "fields": [
+          {
+            "name": "some_field",
+            "type": "bool"
+          },
+          {
+            "name": "other_field",
+            "type": "u8"
+          }
+        ]
+      }
+    }
+  ],
+  "constants": []
+}

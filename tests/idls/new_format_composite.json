@@ -1,0 +1,40 @@
+{
+  "address": "33333333333333333333333333333333",
+  "metadata": {
+    "name": "composite_program",
+    "version": "0.1.0",
+    "spec": "0.1.0"
+  },
+  "instructions": [
+    {
+      "name": "composite_instruction",
+      "discriminator": [100, 200, 50, 25, 12, 6, 3, 1],
+      "accounts": [
+        {
+          "name": "foo",
+          "writable": true,
+          "signer": false
+        },
+        {
+          "name": "bar",
+          "accounts": [
+            {
+              "name": "authority",
+              "signer": true
+            },
+            {
+              "name": "token_account",
+              "writable": true
+            }
+          ]
+        }
+      ],
+      "args": []
+    }
+  ],
+  "accounts": [],
+  "events": [],
+  "errors": [],
+  "types": [],
+  "constants": []
+}
