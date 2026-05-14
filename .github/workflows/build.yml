@@ -19,40 +19,24 @@ env:
   # stable Rust now and only fail on actual errors.
 
 jobs:
-  macos_x86_64:
-    runs-on: macos-13
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.python_version }}
-          architecture: x64
-      - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
-      - name: Build wheels
-        uses: messense/maturin-action@v1
-        with:
-          target: x86_64
-          args: --release --out dist
-      - name: Install built wheel
-        run: |
-          pip install pytest jsonalias
-          pip install ${{ env.name }} --no-index --no-dependencies --find-links dist --force-reinstall
-          pytest
+  # Dropped the standalone ``macos_x86_64`` job — the ``universal2`` wheel
+  # below covers Intel + Apple Silicon Macs with a single artifact.
+  # Switched to ``macos-latest`` (Apple Silicon) because ``macos-13`` Intel
+  # runners are starved on free-tier billing and were leaving the matrix
+  # stuck queued for hours.
   macos_universal2:
-    runs-on: macos-13
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.python_version }}
-          architecture: x64
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:
-          args: --release --universal2 --out dist
+          args: --release --target universal2-apple-darwin --out dist
       - name: Install built wheel
         run: |
           pip install jsonalias pytest
