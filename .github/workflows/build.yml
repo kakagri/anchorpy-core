@@ -64,9 +64,9 @@ jobs:
           pip install ${{ env.name }} --no-index --no-dependencies --find-links dist --force-reinstall
           pytest
       - name: Upload wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-macos-universal2
           path: dist
 
   windows:
@@ -97,9 +97,9 @@ jobs:
           python -m pip install ${{ env.name }} --no-index --no-dependencies --find-links dist --force-reinstall
           python -m pytest
       - name: Upload wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-windows-${{ matrix.target }}
           path: dist
 
   linux:
@@ -133,9 +133,9 @@ jobs:
           pip install ${{ env.name }} --no-index --no-dependencies --find-links dist --force-reinstall
           pytest
       - name: Upload wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-linux-${{ matrix.target }}
           path: dist
 
   musllinux:
@@ -176,9 +176,9 @@ jobs:
             pip3 install ${{ env.name }} --find-links /io/dist/ --force-reinstall --no-index --no-dependencies --break-system-packages
             python3 -m pytest
       - name: Upload wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-musllinux-${{ matrix.target }}
           path: dist
 
   linux-cross:
@@ -205,9 +205,9 @@ jobs:
           manylinux: auto
           args: --release --out dist
       - name: Upload wheels
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-linux-cross-${{ matrix.target }}
           path: dist
 
   sdist:
@@ -223,7 +223,7 @@ jobs:
           command: sdist
           args: --out dist
       - name: Upload sdist
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: wheels
+          name: wheels-sdist
           path: dist

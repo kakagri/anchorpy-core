@@ -7,17 +7,23 @@ jobs:
   release_pypi:
     runs-on: ubuntu-latest
     steps:
+      # ``upload-artifact@v4`` requires unique artifact names, so each build
+      # job uploads to ``wheels-<platform>-<target>``. Match them all by
+      # regex and collapse into a single ``dist/`` directory for maturin.
       - uses: dawidd6/action-download-artifact@v6
         with:
           workflow: build.yml
-          name: wheels
+          name: wheels-.*
+          name_is_regexp: true
+          path: dist
+          merge_multiple: true
       - name: Publish to PyPi
         env:
           MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
         uses: messense/maturin-action@v1
         with:
           command: upload
-          args: --skip-existing *
+          args: --skip-existing dist/*
 
   release_crate:
     runs-on: ubuntu-latest
