@@ -17,7 +17,11 @@ jobs:
         with:
           workflow: build.yml
           workflow_conclusion: success
-          commit: ${{ github.event.release.target_commitish }}
+          # ``github.sha`` on a release event is the tagged commit's SHA.
+          # ``release.target_commitish`` is a branch name when the release was
+          # created via the UI/API without explicit SHA, which won't match the
+          # dawidd6 commit filter.
+          commit: ${{ github.sha }}
           name: wheels-.*
           name_is_regexp: true
           path: dist
@@ -43,6 +47,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
-      - run: cargo publish
+      # ``cargo publish`` has no ``--skip-existing`` flag, so detect the
+      # already-published case explicitly and exit 0 — letting release.yml
+      # be re-runnable for the same tag without manual cleanup.
+      - run: |
+          if cargo publish 2>&1 | tee /tmp/cargo_out; then
+            exit 0
+          fi
+          if grep -q "already exists on crates.io" /tmp/cargo_out; then
+            echo "::notice::crate version already on crates.io — skipping"
+            exit 0
+          fi
+          exit 1
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
