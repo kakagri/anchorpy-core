@@ -94,7 +94,7 @@ pub struct IdlAccountCompat {
     pub is_optional: Option<bool>,
     #[serde(default)]
     pub docs: Option<Vec<String>>,
-    #[serde(default)]
+    #[serde(default, deserialize_with = "deserialize_pda_field")]
     pub pda: Option<IdlPdaCompat>,
     #[serde(default)]
     pub relations: Vec<String>,
@@ -588,7 +588,7 @@ pub struct IdlTypeDefinitionCompat {
     pub docs: Option<Vec<String>>,
     #[serde(default)]
     pub generics: Vec<String>,
-    #[serde(rename = "type")]
+    #[serde(rename = "type", alias = "fieldType")]
     pub ty: IdlTypeDefinitionTyCompat,
 }
 
@@ -610,16 +610,33 @@ impl From<IdlTypeDefinitionCompat> for anchor_idl::types::IdlTypeDef {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum IdlTypeDefinitionTyCompat {
-    Struct { fields: Vec<IdlFieldCompat> },
+    Struct { fields: StructFieldsCompat },
     Enum { variants: Vec<IdlEnumVariantCompat> },
     Alias { value: IdlTypeCompat },
+}
+
+/// Struct fields can be named `[{name, type}]` or tuple `["u8", ...]`.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum StructFieldsCompat {
+    Named(Vec<IdlFieldCompat>),
+    Tuple(Vec<IdlTypeCompat>),
 }
 
 impl From<IdlTypeDefinitionTyCompat> for anchor_idl::types::IdlTypeDefTy {
     fn from(ty: IdlTypeDefinitionTyCompat) -> Self {
         match ty {
-            IdlTypeDefinitionTyCompat::Struct { fields } => Self::Struct {
-                fields: Some(anchor_idl::types::IdlDefinedFields::Named(fields.into_iter().map(|f| f.into()).collect()))
+            IdlTypeDefinitionTyCompat::Struct { fields } => match fields {
+                StructFieldsCompat::Named(fields) => Self::Struct {
+                    fields: Some(anchor_idl::types::IdlDefinedFields::Named(
+                        fields.into_iter().map(|f| f.into()).collect()
+                    ))
+                },
+                StructFieldsCompat::Tuple(types) => Self::Struct {
+                    fields: Some(anchor_idl::types::IdlDefinedFields::Tuple(
+                        types.into_iter().map(|t| t.into()).collect()
+                    ))
+                },
             },
             IdlTypeDefinitionTyCompat::Enum { variants } => Self::Enum {
                 variants: variants.into_iter().map(|v| v.into()).collect()
@@ -633,20 +650,31 @@ impl From<IdlTypeDefinitionTyCompat> for anchor_idl::types::IdlTypeDefTy {
 
 // ── Enum variant compat ─────────────────────────────────────────────────────
 
+/// An enum variant can be a string (simple name) or an object with fields.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct IdlEnumVariantCompat {
-    pub name: String,
-    #[serde(default)]
-    pub docs: Option<Vec<String>>,
-    #[serde(default)]
-    pub fields: Option<EnumFieldsCompat>,
+#[serde(untagged)]
+pub enum IdlEnumVariantCompat {
+    Object {
+        name: String,
+        #[serde(default)]
+        docs: Option<Vec<String>>,
+        #[serde(default)]
+        fields: Option<EnumFieldsCompat>,
+    },
+    Simple(String),
 }
 
 impl From<IdlEnumVariantCompat> for anchor_idl::types::IdlEnumVariant {
     fn from(variant: IdlEnumVariantCompat) -> Self {
-        Self {
-            name: variant.name,
-            fields: variant.fields.map(|f| f.into()),
+        match variant {
+            IdlEnumVariantCompat::Object { name, fields, .. } => Self {
+                name,
+                fields: fields.map(|f| f.into()),
+            },
+            IdlEnumVariantCompat::Simple(name) => Self {
+                name,
+                fields: None,
+            },
         }
     }
 }
@@ -714,10 +742,64 @@ impl From<IdlEventFieldCompat> for anchor_idl::types::IdlField {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IdlErrorCodeCompat {
+    #[serde(deserialize_with = "deserialize_error_code")]
     pub code: u32,
     pub name: String,
-    #[serde(default)]
+    #[serde(default, alias = "message")]
     pub msg: Option<String>,
+}
+
+fn deserialize_error_code<'de, D>(deserializer: D) -> Result<u32, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+    struct ErrorCodeVisitor;
+    impl<'de> de::Visitor<'de> for ErrorCodeVisitor {
+        type Value = u32;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a u32 or a string containing a u32")
+        }
+        fn visit_u64<E: de::Error>(self, v: u64) -> Result<u32, E> {
+            Ok(v as u32)
+        }
+        fn visit_str<E: de::Error>(self, v: &str) -> Result<u32, E> {
+            v.parse::<u32>().map_err(de::Error::custom)
+        }
+    }
+    deserializer.deserialize_any(ErrorCodeVisitor)
+}
+
+/// Deserialize `pda` field which can be a PDA object, `false`, or absent.
+fn deserialize_pda_field<'de, D>(deserializer: D) -> Result<Option<IdlPdaCompat>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    use serde::de;
+    struct PdaVisitor;
+    impl<'de> de::Visitor<'de> for PdaVisitor {
+        type Value = Option<IdlPdaCompat>;
+        fn expecting(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+            f.write_str("a PDA object, false, or null")
+        }
+        fn visit_bool<E: de::Error>(self, _v: bool) -> Result<Option<IdlPdaCompat>, E> {
+            Ok(None)
+        }
+        fn visit_none<E: de::Error>(self) -> Result<Option<IdlPdaCompat>, E> {
+            Ok(None)
+        }
+        fn visit_unit<E: de::Error>(self) -> Result<Option<IdlPdaCompat>, E> {
+            Ok(None)
+        }
+        fn visit_map<A>(self, map: A) -> Result<Option<IdlPdaCompat>, A::Error>
+        where
+            A: de::MapAccess<'de>,
+        {
+            let pda = IdlPdaCompat::deserialize(de::value::MapAccessDeserializer::new(map))?;
+            Ok(Some(pda))
+        }
+    }
+    deserializer.deserialize_any(PdaVisitor)
 }
 
 impl From<IdlErrorCodeCompat> for anchor_idl::types::IdlErrorCode {
