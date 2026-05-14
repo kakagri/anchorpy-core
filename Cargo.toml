@@ -15,8 +15,18 @@ repository = "https://github.com/kakagri/anchorpy-core"
 name = "anchorpy_core"
 crate-type = ["cdylib", "rlib"]
 
+[features]
+# ``extension-module`` is off by default so plain ``cargo build`` (and any
+# Rust crate that depends on us via crates.io) links against libpython
+# normally. When building the Python wheel with maturin the feature is
+# enabled — see ``[tool.maturin] features`` in pyproject.toml — which makes
+# pyo3 skip the libpython link, leaving the Python C-API symbols to be
+# resolved at runtime by the embedding interpreter.
+default = []
+extension-module = ["pyo3/extension-module"]
+
 [dependencies]
-pyo3 = { version = "0.17.2", features = ["extension-module", "abi3-py37"] }
+pyo3 = { version = "0.17.2", features = ["abi3-py37"] }
 solders-macros = "0.6.0"
 derive_more = "0.99.17"
 anchor-lang-idl = { version = "0.1.2" }
