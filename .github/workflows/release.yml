@@ -9,21 +9,34 @@ jobs:
     steps:
       # ``upload-artifact@v4`` requires unique artifact names, so each build
       # job uploads to ``wheels-<platform>-<target>``. Match them all by
-      # regex and collapse into a single ``dist/`` directory for maturin.
+      # regex and pin to the commit this release was cut from — otherwise
+      # the action grabs the latest globally-matching build.yml run, which
+      # can be from a previous publish cycle whose artifacts have already
+      # expired (GitHub deletes artifacts after 90 days by default).
       - uses: dawidd6/action-download-artifact@v6
         with:
           workflow: build.yml
+          workflow_conclusion: success
+          commit: ${{ github.event.release.target_commitish }}
           name: wheels-.*
           name_is_regexp: true
           path: dist
-          merge_multiple: true
+      # The action extracts each artifact into its own subdirectory under
+      # ``dist/`` (``merge_multiple`` is not supported on v6 — silently
+      # ignored if passed). Flatten into a single directory so the maturin
+      # upload glob is simple.
+      - name: Flatten downloaded artifacts
+        run: |
+          mkdir -p dist-flat
+          find dist -type f \( -name '*.whl' -o -name '*.tar.gz' \) -exec mv {} dist-flat/ \;
+          ls -la dist-flat/
       - name: Publish to PyPi
         env:
           MATURIN_PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
         uses: messense/maturin-action@v1
         with:
           command: upload
-          args: --skip-existing dist/*
+          args: --skip-existing dist-flat/*
 
   release_crate:
     runs-on: ubuntu-latest
