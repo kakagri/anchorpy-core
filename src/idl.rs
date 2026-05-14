@@ -820,7 +820,7 @@ pub fn parse_idl_compat(json: &str) -> Result<anchor_idl::types::Idl, serde_json
 }
 
 // Python module creation function
-pub(crate) fn create_idl_mod(py: Python) -> PyResult<&PyModule> {
+pub(crate) fn create_idl_mod(py: Python<'_>) -> PyResult<&PyModule> {
     let m = PyModule::new(py, "idl")?;
     m.add_function(wrap_pyfunction!(parse_idl_compat_py, m)?)?;
     Ok(m)

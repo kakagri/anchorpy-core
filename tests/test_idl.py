@@ -31,7 +31,9 @@ def test_new_format_basic() -> None:
     assert idl["metadata"]["version"] == "0.1.0"
     assert len(idl["instructions"]) == 1
     assert idl["instructions"][0]["name"] == "initialize"
-    assert idl["instructions"][0]["discriminator"] == [175, 175, 109, 31, 13, 152, 155, 237]
+    assert idl["instructions"][0]["discriminator"] == [
+        175, 175, 109, 31, 13, 152, 155, 237,
+    ]
 
 
 def test_new_format_accounts_events() -> None:
@@ -120,14 +122,15 @@ def test_old_format_clientgen() -> None:
 # ── Comprehensive parsing test ──────────────────────────────────────────────
 
 
-# IDLs with known unsupported features (e.g., definedWithTypeArgs / generics)
+# IDLs with known unsupported features (e.g. definedWithTypeArgs / generics).
 KNOWN_PARSE_FAILURES = {
-    "generics_build.json",  # uses definedWithTypeArgs which IdlTypeCompat doesn't handle yet
+    # Uses definedWithTypeArgs which IdlTypeCompat doesn't handle yet.
+    "generics_build.json",
 }
 
 
 def test_all_idls_parse() -> None:
-    """All IDLs in the test directory should parse without error (except known failures)."""
+    """All test-dir IDLs should parse, except the documented exceptions."""
     idls = []
     failures = []
     for path in sorted(Path("tests/idls/").iterdir()):

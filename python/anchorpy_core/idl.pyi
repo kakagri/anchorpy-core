@@ -558,3 +558,9 @@ IdlTypeCompound = Union[
 ]
 IdlType = Union[IdlTypeCompound, IdlTypeSimple]
 EnumFields = Union[EnumFieldsNamed, EnumFieldsTuple]
+
+
+def parse_idl_compat_py(raw_json: str) -> str:
+    """Normalise any Anchor IDL JSON (legacy or new-format) to canonical
+    new-format JSON, returned as a JSON string."""
+    ...

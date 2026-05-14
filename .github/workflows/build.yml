@@ -13,7 +13,10 @@ env:
   name: anchorpy3_core
   python_version: "3.9"
   CARGO_INCREMENTAL: 0
-  RUSTFLAGS: "-D warnings"
+  # ``-D warnings`` was previously here. Combined with the nightly Rust we
+  # used to require, it made every new Rust lint a hard build failure
+  # (e.g. ``mismatched_lifetime_syntaxes`` added in late 2025). We pin to
+  # stable Rust now and only fail on actual errors.
 
 jobs:
   macos_x86_64:
@@ -25,11 +28,7 @@ jobs:
           python-version: ${{ env.python_version }}
           architecture: x64
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          profile: minimal
-          default: true
+        uses: dtolnay/rust-toolchain@stable
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:
@@ -49,11 +48,7 @@ jobs:
           python-version: ${{ env.python_version }}
           architecture: x64
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          profile: minimal
-          default: true
+        uses: dtolnay/rust-toolchain@stable
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:
@@ -81,11 +76,7 @@ jobs:
           python-version: ${{ env.python_version }}
           architecture: ${{ matrix.target }}
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          profile: minimal
-          default: true
+        uses: dtolnay/rust-toolchain@stable
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:
@@ -115,11 +106,7 @@ jobs:
           python-version: ${{ env.python_version }}
           architecture: x64
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          profile: minimal
-          default: true
+        uses: dtolnay/rust-toolchain@stable
       - name: Build Wheels
         uses: messense/maturin-action@v1
         with:
@@ -153,11 +140,7 @@ jobs:
           python-version: ${{ env.python_version }}
           architecture: x64
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          profile: minimal
-          default: true
+        uses: dtolnay/rust-toolchain@stable
       - name: Build wheels
         uses: messense/maturin-action@v1
         with:
@@ -193,11 +176,7 @@ jobs:
         with:
           python-version: ${{ env.python_version }}
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          profile: minimal
-          default: true
+        uses: dtolnay/rust-toolchain@stable
       - name: Build Wheels
         uses: messense/maturin-action@v1
         with:
