@@ -7,7 +7,10 @@ on:
     branches: [main]
 
 env:
-  name: anchorpy_core
+  # ``name`` is what we ``pip install`` from the freshly-built wheel for
+  # post-build smoke tests. It must match the PyPI distribution name (with
+  # underscores per pip's normalization). Import name remains "anchorpy_core".
+  name: anchorpy3_core
   python_version: "3.9"
   CARGO_INCREMENTAL: 0
   RUSTFLAGS: "-D warnings"
@@ -16,8 +19,8 @@ jobs:
   macos_x86_64:
     runs-on: macos-13
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.python_version }}
           architecture: x64
@@ -40,8 +43,8 @@ jobs:
   macos_universal2:
     runs-on: macos-13
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.python_version }}
           architecture: x64
@@ -72,8 +75,8 @@ jobs:
       matrix:
         target: [x64]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.python_version }}
           architecture: ${{ matrix.target }}
@@ -106,8 +109,8 @@ jobs:
       matrix:
         target: [x86_64, i686]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.python_version }}
           architecture: x64
@@ -144,8 +147,8 @@ jobs:
           - x86_64-unknown-linux-musl
           - i686-unknown-linux-musl
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.python_version }}
           architecture: x64
@@ -185,8 +188,8 @@ jobs:
       matrix:
         target: [aarch64, armv7, s390x, ppc64]
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.python_version }}
       - name: Install Rust toolchain
@@ -210,8 +213,8 @@ jobs:
   sdist:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - uses: actions/setup-python@v2
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version:
       - name: Build sdist

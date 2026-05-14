@@ -57,8 +57,8 @@ dependencies = [
 ]
 
 [[package]]
-name = "anchorpy_core"
-version = "0.2.0"
+name = "anchorpy3-core"
+version = "0.3.0"
 dependencies = [
  "anchor-lang-idl",
  "derive_more",
